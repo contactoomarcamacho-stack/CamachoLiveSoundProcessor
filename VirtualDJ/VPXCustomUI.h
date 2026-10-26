@@ -29,9 +29,9 @@ struct VPXEditor {
  static constexpr int W=1536,H=1024;
  struct Knob { int x,y,r,p; const char* name; };
  std::vector<Knob> knobs={
- {113,509,52,0,"DRIVE"},{226,499,27,1,"TONE"},{307,499,27,2,"MIX"},
- {445,493,38,3,"LOW"},{581,493,38,4,"LOW MID"},{718,493,38,5,"HIGH MID"},{854,493,38,6,"HIGH"},
- {1422,494,45,7,"CEILING"},{75,822,27,8,"INPUT"},{182,822,27,9,"OUTPUT"}
+ {113,509,52,0,"INPUT"},{226,499,27,1,"TREBLE"},{307,499,27,2,"OUTPUT"},
+ {445,493,38,3,"BASS"},{581,493,38,4,"MID"},{718,493,38,5,"THRESHOLD"},{854,493,38,6,"RATIO"},
+ {1422,494,45,7,"CEILING"},{75,822,27,8,"ATTACK"},{182,822,27,9,"RELEASE"}
  };
  static COLORREF col(int r,int g,int b){return RGB(r,g,b);}
  static void rect(HDC dc,int x,int y,int w,int h,COLORREF c) {
@@ -70,7 +70,7 @@ struct VPXEditor {
   label(dc,213,61,"MASTERING PROCESSOR",13);label(dc,409,48,"MULTIBAND  /  DYNAMICS  /  LIMITER  /  SATURATION  /  STEREO  /  MASTERING",13,col(160,190,216));
   rect(dc,849,24,300,42,col(8,18,30));label(dc,871,37,"001 - LIVE MASTER (Default)",17);
   rect(dc,1410,22,109,45,*bypass?col(76,23,30):col(9,59,103));label(dc,1422,34,*bypass?"BYPASSED":"BYPASS",18);
-  panel(dc,17,91,123,276,"INPUT");panel(dc,148,91,961,276,"SPECTRUM ANALYZER");
+  panel(dc,17,91,123,276,"INPUT");panel(dc,148,91,961,276,"SPECTRUM (VISUAL DEMO ONLY)");
   panel(dc,1116,91,267,276,"STEREO FIELD");panel(dc,1391,91,127,276,"OUTPUT");
   for(int i=0;i<2;++i){int x=44+i*38;rect(dc,x,157,20,170,col(17,36,50));float m=meter?std::min(1.f,std::max(0.f,*meter)):0.55f;int h=(int)(170*m);
    for(int j=0;j<h;j+=6)rect(dc,x,327-j,19,5,j>133?col(255,64,49):j>100?col(251,196,20):col(28,222,83));}
@@ -85,12 +85,12 @@ struct VPXEditor {
   label(dc,185,338,"20        50          100           200          500            1k            2k             5k             10k           20k",13,col(158,193,221));
   for(int i=0;i<9;++i){int x=1144+i*25;line(dc,1245,146,x,226,col(12,112,201));line(dc,1245,302,x,226,col(12,112,201));}
   line(dc,1143,225,1354,225,col(14,185,255),2);line(dc,1245,140,1245,309,col(14,185,255),2);
-  panel(dc,10,380,345,337,"HARMONIC DRIVE");panel(dc,363,380,581,337,"MULTIBAND COMPRESSOR");
+  panel(dc,10,380,345,337,"INPUT / OUTPUT / TONE");panel(dc,363,380,581,337,"STEREO COMPRESSOR");
   panel(dc,953,380,352,337,"EQ PARAMETRIC");panel(dc,1313,380,214,337,"LIMITER / MAXIMIZER");
-  panel(dc,10,726,230,206,"GATE / EXPANDER");panel(dc,247,726,207,206,"TRANSIENT DESIGNER");
+  panel(dc,10,726,230,206,"COMPRESSOR TIMING");panel(dc,247,726,207,206,"TRANSIENT DESIGNER");
   panel(dc,463,726,297,206,"STEREO PROCESSING");panel(dc,767,726,190,206,"EXCITER");
-  panel(dc,964,726,314,206,"REVERB");panel(dc,1285,726,243,206,"DELAY");
-  panel(dc,10,940,300,74,"OVERSAMPLING");panel(dc,319,940,776,74,"PRESETS");
+  panel(dc,964,726,314,206,"AMBIENCE / ECHO");panel(dc,1285,726,243,206,"DELAY");
+  panel(dc,10,940,300,74,"OVERSAMPLING (NOT ACTIVE)");panel(dc,319,940,776,74,"PRESETS");
   panel(dc,1103,940,192,74,"OUTPUT METERING");panel(dc,1302,940,226,74,"DITHER");
   const COLORREF colors[]={col(22,161,255),col(27,158,255),col(27,158,255),col(251,75,67),col(244,183,34),col(36,222,90),col(31,153,255),col(255,69,62),col(30,163,252),col(30,163,252)};
   for(const auto& k:knobs){float v=params[k.p]?*params[k.p]:.5f;knob(dc,k.x,k.y,k.r,v,colors[k.p]);
@@ -100,7 +100,7 @@ struct VPXEditor {
   for(int i=0;i<6;++i){int x=978+i*53;int y=635-(int)((eq[i]?*eq[i]:.5f)*172);knob(dc,x,y,11,eq[i]?*eq[i]:.5f,col(25,168,255));}
   label(dc,987,659,"60       180        500        1.8k        6k       12k",13);
   char stereoText[90];std::snprintf(stereoText,sizeof(stereoText),"WIDTH %.0f%%  CORR %+.2f",stereoWidth?*stereoWidth*200.f:100.f,stereoCorrelation?*stereoCorrelation:0.f);label(dc,1145,345,stereoText,13);
-  label(dc,49,962,"OFF       2x        4x        8x       16x",15);
+  label(dc,49,962,"Not implemented",15);
   label(dc,410,965,preset&&*preset==1?"002 - Punchy":"001 - Live Master (Default)",18);
   char met[80];std::snprintf(met,sizeof(met),"IN %.0f%%  OUT %.0f%%",inputPeak?*inputPeak*100:0.f,outputPeak?*outputPeak*100:0.f);label(dc,1110,967,met,14);
   label(dc,1331,967,ditherMode&&*ditherMode==1?"DITHER: 16 BIT":ditherMode&&*ditherMode==2?"DITHER: 24 BIT":"DITHER: OFF",15);
@@ -111,7 +111,7 @@ struct VPXEditor {
   label(dc,994,892,"ROOM      HALL      PLATE",14);
   knob(dc,1110,816,28,reverb?*reverb:0.f,col(27,163,255));label(dc,1314,891,"TIME    FEEDBACK   MIX",14);
   knob(dc,1404,816,28,delay?*delay:0.f,col(27,163,255));
-  label(dc,1390,651,"TRUE PEAK",15);label(dc,32,658,"TUBE     TAPE     SOLID     CLASSIC",15);
+  label(dc,1390,651,"SAMPLE PEAK",15);label(dc,32,658,"Input gain and tonal controls",15);
  }
  static LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
   auto* self=(VPXEditor*)GetWindowLongPtrA(h,GWLP_USERDATA);
