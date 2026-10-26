@@ -80,7 +80,7 @@ public:
         info->PluginName="VPX PRO MASTERING PROCESSOR";
         info->Author="VPX";
         info->Description="Stereo EQ, compressor, peak limiter and adjustable gain";
-        info->Version="4.0";
+        info->Version="4.1";
         info->Flags=0;
         info->Bitmap=NULL;
         return S_OK;
@@ -107,7 +107,7 @@ public:
         float b0[6],b1[6],b2[6],a1[6],a2[6];
         for(int k=0;k<6;++k){
             const float A=std::pow(10.f,((eq[k]-.5f)*24.f)/40.f);
-            const float omega=6.2831853f*hz[k]/sr;
+            const float omega=6.2831853f*std::min(hz[k],sr*.45f)/sr;
             const float alpha=std::sin(omega)/2.8f;
             const float den=1.f+alpha/A;
             b0[k]=(1+alpha*A)/den; b1[k]=-2*std::cos(omega)/den;
