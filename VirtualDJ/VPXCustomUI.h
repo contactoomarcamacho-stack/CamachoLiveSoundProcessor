@@ -104,7 +104,7 @@ struct VPXEditor {
   if(m==WM_PAINT){PAINTSTRUCT ps;HDC dc=BeginPaint(h,&ps);RECT r;GetClientRect(h,&r);
     HDC mem=CreateCompatibleDC(dc);HBITMAP bm=CreateCompatibleBitmap(dc,r.right,r.bottom);HBITMAP old=(HBITMAP)SelectObject(mem,bm);
     SetMapMode(mem,MM_ANISOTROPIC);SetWindowExtEx(mem,W,H,nullptr);SetViewportExtEx(mem,r.right,r.bottom,nullptr);
-    self->draw(mem);BitBlt(dc,0,0,r.right,r.bottom,mem,0,0,SRCCOPY);
+    self->draw(mem);SetMapMode(mem,MM_TEXT);BitBlt(dc,0,0,r.right,r.bottom,mem,0,0,SRCCOPY);
     SelectObject(mem,old);DeleteObject(bm);DeleteDC(mem);EndPaint(h,&ps);return 0;}
   if(m==WM_LBUTTONDOWN||m==WM_MOUSEMOVE){if(m==WM_MOUSEMOVE&&!(w&MK_LBUTTON))return 0;
    RECT r;GetClientRect(h,&r);int x=LOWORD(l)*W/std::max(1L,r.right),y=HIWORD(l)*H/std::max(1L,r.bottom);
