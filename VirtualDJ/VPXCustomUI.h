@@ -92,7 +92,7 @@ struct VPXEditor {
    char buf[50];std::snprintf(buf,sizeof(buf),"%s  %.0f%%",k.name,v*100);label(dc,k.x-k.r,k.y+k.r+17,buf,13);}
   for(int i=0;i<4;++i){char t[30];std::snprintf(t,sizeof(t),"BAND %d",i+1);label(dc,408+i*135,432,t,15);}
   for(int i=0;i<6;++i){int x=973+i*51;line(dc,x,463,x,635,col(28,57,77));}
-  for(int i=0;i<6;++i){int x=978+i*53;int y=545+(i%3-1)*24;knob(dc,x,y,11,eq[i]?*eq[i]:.5f,col(25,168,255));}
+  for(int i=0;i<6;++i){int x=978+i*53;int y=635-(int)((eq[i]?*eq[i]:.5f)*172);knob(dc,x,y,11,eq[i]?*eq[i]:.5f,col(25,168,255));}
   label(dc,987,659,"60       180        500        1.8k        6k       12k",13);
   label(dc,1145,345,"WIDTH: adjustable",13);
   label(dc,49,962,"OFF       2x        4x        8x       16x",15);
