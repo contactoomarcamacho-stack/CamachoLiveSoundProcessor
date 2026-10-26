@@ -116,6 +116,22 @@ public:
             b2[k]=(1-alpha*A)/den; a1[k]=b1[k]; a2[k]=(1-alpha/A)/den;
         }
         for(int i=0;i<frames;++i) {
+            for(int k=0;k<6;++k){
+                eqB0[k]+=smooth*(b0[k]-eqB0[k]);
+                eqB1[k]+=smooth*(b1[k]-eqB1[k]);
+                eqB2[k]+=smooth*(b2[k]-eqB2[k]);
+                eqA1[k]+=smooth*(a1[k]-eqA1[k]);
+                eqA2[k]+=smooth*(a2[k]-eqA2[k]);
+            }
+            smoothBass+=smooth*(gBass-smoothBass);
+            smoothMid+=smooth*(gMid-smoothMid);
+            smoothTreble+=smooth*(gHigh-smoothTreble);
+            smoothThreshold+=smooth*(thr-smoothThreshold);
+            smoothRatio+=smooth*(compRatio-smoothRatio);
+            smoothTransient+=smooth*(transient-smoothTransient);
+            smoothExciter+=smooth*(exciter-smoothExciter);
+            smoothReverb+=smooth*(reverb-smoothReverb);
+            smoothDelay+=smooth*(delayMix-smoothDelay);
             smoothIn+=smooth*(gIn-smoothIn);
             smoothOut+=smooth*(gOut-smoothOut);
             smoothWidth+=smooth*(stereoWidth*2.f-smoothWidth);
@@ -124,15 +140,16 @@ public:
             float r=std::isfinite(buffer[i*2+1])?std::clamp(buffer[i*2+1],-16.f,16.f)*smoothIn:0.f;
             lowL+=aLow*(l-lowL); lowR+=aLow*(r-lowR);
             highL+=aHigh*(l-highL); highR+=aHigh*(r-highR);
-            l=lowL*gBass+(highL-lowL)*gMid+(l-highL)*gHigh;
-            r=lowR*gBass+(highR-lowR)*gMid+(r-highR)*gHigh;
+            l=lowL*smoothBass+(highL-lowL)*smoothMid+(l-highL)*smoothTreble;
+            r=lowR*smoothBass+(highR-lowR)*smoothMid+(r-highR)*smoothTreble;
             float* ch[2]={&l,&r};
             for(int channel=0;channel<2;++channel) for(int k=0;k<6;++k){
                 auto& f=filters[channel][k];
                 const float x=*ch[channel];
-                const float y=b0[k]*x+f.z1;
-                f.z1=b1[k]*x-a1[k]*y+f.z2;
-                f.z2=b2[k]*x-a2[k]*y;
+                const float y=eqB0[k]*x+f.z1;
+                f.z1=eqB1[k]*x-eqA1[k]*y+f.z2;
+                f.z2=eqB2[k]*x-eqA2[k]*y;
+                if(!std::isfinite(f.z1)||!std::isfinite(f.z2)){f.z1=0.f;f.z2=0.f;}
                 *ch[channel]=y;
             }
             const float mid=.5f*(l+r),side=.5f*(l-r)*smoothWidth;
@@ -145,23 +162,23 @@ public:
             if((i&255)==0) inputPeak=.93f*inputPeak+.07f*std::min(1.f,peak);
             const float tcoef=std::exp(-1.f/(sr*.025f));
             transientEnv=tcoef*transientEnv+(1-tcoef)*peak;
-            const float tGain=std::clamp(1.f+(transient-.5f)*2.f*(peak-transientEnv)/(transientEnv+.1f),.25f,2.f);
+            const float tGain=std::clamp(1.f+(smoothTransient-.5f)*2.f*(peak-transientEnv)/(transientEnv+.1f),.25f,2.f);
             l*=tGain;r*=tGain;
             exciterLowL+=aHigh*(l-exciterLowL);exciterLowR+=aHigh*(r-exciterLowR);
-            l+=exciter*.35f*std::tanh((l-exciterLowL)*4.f);
-            r+=exciter*.35f*std::tanh((r-exciterLowR)*4.f);
+            l+=smoothExciter*.35f*std::tanh((l-exciterLowL)*4.f);
+            r+=smoothExciter*.35f*std::tanh((r-exciterLowR)*4.f);
             const int tap=(delayPos+delaySize-std::min(delaySize-1,(int)(sr*.22f)))%delaySize;
             const float dl=delayL[tap],dr=delayR[tap];
             delayL[delayPos]=std::clamp(l+dl*.35f,-2.f,2.f);
             delayR[delayPos]=std::clamp(r+dr*.35f,-2.f,2.f);
             delayPos=(delayPos+1)%delaySize;
-            l+=dl*(delayMix*.45f+reverb*.25f);
+            l+=dl*(smoothDelay*.45f+smoothReverb*.25f);
             r+=dr*(delayMix*.45f+reverb*.25f);
             if ((i & 255)==0) uiMeter=0.97f*uiMeter+0.03f*std::min(1.0f,peak);
             const float coef=peak>env?aAtk:aRel;
             env=coef*env+(1-coef)*peak;
             const float level=std::max(env,1.0e-9f);
-            const float gain=level>thr?std::pow(level/thr,1/compRatio-1):1;
+            const float gain=level>smoothThreshold?std::pow(level/smoothThreshold,1/smoothRatio-1):1;
             float outL=std::clamp(l*gain*smoothOut,-smoothLimit,smoothLimit);
             float outR=std::clamp(r*gain*smoothOut,-smoothLimit,smoothLimit);
             if(ditherMode){const float lsb=ditherMode==1?1.f/32768.f:1.f/8388608.f;
@@ -176,6 +193,9 @@ public:
     }
 private:
     float lastSampleRate=0.f,smoothIn=1.f,smoothOut=1.f,smoothWidth=1.f,smoothLimit=.95f;
+    float smoothBass=1.f,smoothMid=1.f,smoothTreble=1.f,smoothThreshold=.5f,smoothRatio=2.f;
+    float smoothTransient=.5f,smoothExciter=0.f,smoothReverb=0.f,smoothDelay=0.f;
+    float eqB0[6]={1,1,1,1,1,1},eqB1[6]={},eqB2[6]={},eqA1[6]={},eqA2[6]={};
     int bypass=0,reset=0;
     float input=.5f,bass=.5f,mid=.5f,treble=.5f,threshold=.6f,ratio=.25f,attack=.3f,releaseTime=.35f,ceiling=.92f,output=.5f;
     float env=0,lowL=0,lowR=0,highL=0,highR=0;
