@@ -18,6 +18,8 @@ struct VPXEditor {
  float* params[10]={};
  int* bypass=nullptr;
  float* meter=nullptr;
+ float* eq[6]={};
+ float* stereoWidth=nullptr;
  int selected=-1;
  static constexpr int W=1536,H=1024;
  struct Knob { int x,y,r,p; const char* name; };
@@ -90,8 +92,9 @@ struct VPXEditor {
    char buf[50];std::snprintf(buf,sizeof(buf),"%s  %.0f%%",k.name,v*100);label(dc,k.x-k.r,k.y+k.r+17,buf,13);}
   for(int i=0;i<4;++i){char t[30];std::snprintf(t,sizeof(t),"BAND %d",i+1);label(dc,408+i*135,432,t,15);}
   for(int i=0;i<6;++i){int x=973+i*51;line(dc,x,463,x,635,col(28,57,77));}
-  for(int i=0;i<6;++i){int x=978+i*53;int y=545+(i%3-1)*24;knob(dc,x,y,11,.5f,col(25,168,255));}
-  label(dc,987,659,"20       100        500        2k        8k       20k",13);
+  for(int i=0;i<6;++i){int x=978+i*53;int y=545+(i%3-1)*24;knob(dc,x,y,11,eq[i]?*eq[i]:.5f,col(25,168,255));}
+  label(dc,987,659,"60       180        500        1.8k        6k       12k",13);
+  label(dc,1145,345,"WIDTH: adjustable",13);
   label(dc,49,962,"OFF       2x        4x        8x       16x",15);
   label(dc,410,965,"001 - Live Master (Default)",18);
   label(dc,1118,967,"PEAK    RMS    LUFS",15);
@@ -116,9 +119,13 @@ struct VPXEditor {
    RECT r;GetClientRect(h,&r);int x=LOWORD(l)*W/std::max(1L,r.right),y=HIWORD(l)*H/std::max(1L,r.bottom);
    if(m==WM_LBUTTONDOWN){self->selected=-1;
     if(x>1400&&y<83){*self->bypass=!*self->bypass;InvalidateRect(h,nullptr,FALSE);return 0;}
+    if(x>=964&&x<=1305&&y>=463&&y<=635){int k=std::clamp((x-962)/53,0,5);self->selected=100+k;SetCapture(h);}
+    if(x>=1116&&x<=1383&&y>=91&&y<=367){self->selected=200;SetCapture(h);}
     for(int i=0;i<(int)self->knobs.size();++i){auto& k=self->knobs[i];if(abs(x-k.x)<k.r+18&&abs(y-k.y)<k.r+18){self->selected=i;SetCapture(h);break;}}
    }
-   if(self->selected>=0){auto& k=self->knobs[self->selected];float v=std::clamp((float)(k.y+75-y)/150.f,0.f,1.f);*self->params[k.p]=v;InvalidateRect(h,nullptr,FALSE);}
+   if(self->selected>=100&&self->selected<106){int k=self->selected-100;*self->eq[k]=std::clamp((float)(635-y)/172.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
+   else if(self->selected==200){*self->stereoWidth=std::clamp((float)(x-1116)/267.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
+   else if(self->selected>=0){auto& k=self->knobs[self->selected];float v=std::clamp((float)(k.y+75-y)/150.f,0.f,1.f);*self->params[k.p]=v;InvalidateRect(h,nullptr,FALSE);}
    return 0;}
   if(m==WM_LBUTTONUP){self->selected=-1;ReleaseCapture();return 0;}
   if(m==WM_DESTROY){KillTimer(h,1);self->hwnd=nullptr;return 0;}
