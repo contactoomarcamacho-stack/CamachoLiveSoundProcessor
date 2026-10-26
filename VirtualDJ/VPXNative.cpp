@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <cstdio>
+#include "VPXCustomUI.h"
 #ifdef min
 #undef min
 #endif
@@ -30,8 +31,15 @@ public:
         return S_OK;
     }
     HRESULT VDJ_API OnGetUserInterface(TVdjPluginInterface8* ui) override {
-        ui->Type = VDJINTERFACE_DEFAULT;
-        return S_OK;
+        if (!ui) return E_POINTER;
+        editor.params[0]=&input; editor.params[1]=&treble; editor.params[2]=&output;
+        editor.params[3]=&bass; editor.params[4]=&mid; editor.params[5]=&threshold;
+        editor.params[6]=&ratio; editor.params[7]=&ceiling;
+        editor.params[8]=&attack; editor.params[9]=&releaseTime;
+        editor.bypass=&bypass; editor.meter=&uiMeter;
+        ui->Type=VDJINTERFACE_DIALOG;
+        ui->hWnd=editor.open(hInstance);
+        return ui->hWnd ? S_OK : E_FAIL;
     }
     HRESULT VDJ_API OnParameter(int id) override {
         if (id == RESET && reset) {
@@ -64,12 +72,12 @@ public:
         info->PluginName="VPX PRO MASTERING PROCESSOR";
         info->Author="VPX";
         info->Description="Stereo EQ, compressor, peak limiter and adjustable gain";
-        info->Version="3.0";
+        info->Version="4.0";
         info->Flags=0;
         info->Bitmap=NULL;
         return S_OK;
     }
-    ULONG VDJ_API Release() override { delete this; return 0; }
+    ULONG VDJ_API Release() override { if(editor.hwnd && IsWindow(editor.hwnd)) DestroyWindow(editor.hwnd); delete this; return 0; }
     HRESULT VDJ_API OnStart() override { env=0; lowL=lowR=highL=highR=0; return S_OK; }
     HRESULT VDJ_API OnStop() override { env=0; return S_OK; }
     HRESULT VDJ_API OnProcessSamples(float* buffer,int frames) override {
@@ -95,6 +103,7 @@ public:
             l=lowL*gBass+(highL-lowL)*gMid+(l-highL)*gHigh;
             r=lowR*gBass+(highR-lowR)*gMid+(r-highR)*gHigh;
             const float peak=std::max(std::abs(l),std::abs(r));
+            if ((i & 255)==0) uiMeter=0.97f*uiMeter+0.03f*std::min(1.0f,peak);
             const float coef=peak>env?aAtk:aRel;
             env=coef*env+(1-coef)*peak;
             const float level=std::max(env,1.0e-9f);
@@ -108,6 +117,8 @@ private:
     int bypass=0,reset=0;
     float input=.5f,bass=.5f,mid=.5f,treble=.5f,threshold=.6f,ratio=.25f,attack=.3f,releaseTime=.35f,ceiling=.92f,output=.5f;
     float env=0,lowL=0,lowR=0,highL=0,highR=0;
+    float uiMeter=0;
+    VPXEditor editor;
 };
 extern "C" __declspec(dllexport) HRESULT VDJ_API DllGetClassObject(const GUID& clsid,const GUID& iid,void** object) {
     if (!object) return E_POINTER;
