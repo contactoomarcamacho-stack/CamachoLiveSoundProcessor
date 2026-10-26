@@ -1,6 +1,12 @@
 #pragma once
 // Native Win32 custom editor for VirtualDJ 8. Coordinates based on 1536x1024 reference.
 #include <windows.h>
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -25,11 +31,11 @@ struct VPXEditor {
   RECT r={x,y,x+w,y+h};HBRUSH b=CreateSolidBrush(c);FillRect(dc,&r,b);DeleteObject(b);
  }
  static void frame(HDC dc,int x,int y,int w,int h,COLORREF c) {
-  HPEN p=CreatePen(PS_SOLID,1,c),*old=(HPEN)SelectObject(dc,p);HGDIOBJ ob=SelectObject(dc,GetStockObject(NULL_BRUSH));
+  HPEN p=CreatePen(PS_SOLID,1,c),old=(HPEN)SelectObject(dc,p);HGDIOBJ ob=SelectObject(dc,GetStockObject(NULL_BRUSH));
   Rectangle(dc,x,y,x+w,y+h);SelectObject(dc,ob);SelectObject(dc,old);DeleteObject(p);
  }
  static void line(HDC dc,int x,int y,int x2,int y2,COLORREF c,int width=1){
-  HPEN p=CreatePen(PS_SOLID,width,c),*old=(HPEN)SelectObject(dc,p);MoveToEx(dc,x,y,nullptr);LineTo(dc,x2,y2);SelectObject(dc,old);DeleteObject(p);
+  HPEN p=CreatePen(PS_SOLID,width,c),old=(HPEN)SelectObject(dc,p);MoveToEx(dc,x,y,nullptr);LineTo(dc,x2,y2);SelectObject(dc,old);DeleteObject(p);
  }
  static void label(HDC dc,int x,int y,const char* s,int size=15,COLORREF c=RGB(226,239,251),bool bold=false){
   HFONT f=CreateFontA(-size,0,0,0,bold?FW_BOLD:FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,"Segoe UI");
