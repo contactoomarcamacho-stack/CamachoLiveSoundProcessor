@@ -8,7 +8,7 @@ public:
  void processBlock(juce::AudioBuffer<float>&,juce::MidiBuffer&) override;
  juce::AudioProcessorEditor* createEditor() override;
  bool hasEditor() const override {return true;}
- const juce::String getName() const override {return "CAMACHO LIVE SOUND PROCESSOR";}
+ const juce::String getName() const override {return "VPX PRO MASTERING PROCESSOR";}
  bool acceptsMidi() const override {return false;}
  bool producesMidi() const override {return false;}
  bool isMidiEffect() const override {return false;}
