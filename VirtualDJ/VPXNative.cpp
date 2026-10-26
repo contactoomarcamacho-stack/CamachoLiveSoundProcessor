@@ -36,6 +36,8 @@ public:
         editor.params[3]=&bass; editor.params[4]=&mid; editor.params[5]=&threshold;
         editor.params[6]=&ratio; editor.params[7]=&ceiling;
         editor.params[8]=&attack; editor.params[9]=&releaseTime;
+        for(int i=0;i<6;++i) editor.eq[i]=&eq[i];
+        editor.stereoWidth=&stereoWidth;
         editor.bypass=&bypass; editor.meter=&uiMeter;
         ui->Type=VDJINTERFACE_DIALOG;
         ui->hWnd=editor.open(hInstance);
@@ -78,7 +80,7 @@ public:
         return S_OK;
     }
     ULONG VDJ_API Release() override { if(editor.hwnd && IsWindow(editor.hwnd)) DestroyWindow(editor.hwnd); delete this; return 0; }
-    HRESULT VDJ_API OnStart() override { env=0; lowL=lowR=highL=highR=0; return S_OK; }
+    HRESULT VDJ_API OnStart() override { env=0; lowL=lowR=highL=highR=0; for(auto& ch:filters)for(auto& f:ch)f={}; return S_OK; }
     HRESULT VDJ_API OnStop() override { env=0; return S_OK; }
     HRESULT VDJ_API OnProcessSamples(float* buffer,int frames) override {
         if (!buffer || frames<=0 || bypass) return S_OK;
@@ -95,6 +97,16 @@ public:
         const float aAtk=std::exp(-1/(sr*(0.002f+attack*0.098f)));
         const float aRel=std::exp(-1/(sr*(0.05f+releaseTime*0.55f)));
         const float limit=std::pow(10.0f,(-12+ceiling*11.7f)/20);
+        const float hz[6]={60,180,500,1800,6000,12000};
+        float b0[6],b1[6],b2[6],a1[6],a2[6];
+        for(int k=0;k<6;++k){
+            const float A=std::pow(10.f,((eq[k]-.5f)*24.f)/40.f);
+            const float omega=6.2831853f*hz[k]/sr;
+            const float alpha=std::sin(omega)/2.8f;
+            const float den=1.f+alpha/A;
+            b0[k]=(1+alpha*A)/den; b1[k]=-2*std::cos(omega)/den;
+            b2[k]=(1-alpha*A)/den; a1[k]=b1[k]; a2[k]=(1-alpha/A)/den;
+        }
         for(int i=0;i<frames;++i) {
             float l=std::isfinite(buffer[i*2])?buffer[i*2]*gIn:0;
             float r=std::isfinite(buffer[i*2+1])?buffer[i*2+1]*gIn:0;
@@ -102,6 +114,17 @@ public:
             highL+=aHigh*(l-highL); highR+=aHigh*(r-highR);
             l=lowL*gBass+(highL-lowL)*gMid+(l-highL)*gHigh;
             r=lowR*gBass+(highR-lowR)*gMid+(r-highR)*gHigh;
+            float* ch[2]={&l,&r};
+            for(int channel=0;channel<2;++channel) for(int k=0;k<6;++k){
+                auto& f=filters[channel][k];
+                const float x=*ch[channel];
+                const float y=b0[k]*x+f.z1;
+                f.z1=b1[k]*x-a1[k]*y+f.z2;
+                f.z2=b2[k]*x-a2[k]*y;
+                *ch[channel]=y;
+            }
+            const float mid=.5f*(l+r),side=.5f*(l-r)*(stereoWidth*2.f);
+            l=mid+side; r=mid-side;
             const float peak=std::max(std::abs(l),std::abs(r));
             if ((i & 255)==0) uiMeter=0.97f*uiMeter+0.03f*std::min(1.0f,peak);
             const float coef=peak>env?aAtk:aRel;
@@ -118,6 +141,9 @@ private:
     float input=.5f,bass=.5f,mid=.5f,treble=.5f,threshold=.6f,ratio=.25f,attack=.3f,releaseTime=.35f,ceiling=.92f,output=.5f;
     float env=0,lowL=0,lowR=0,highL=0,highR=0;
     float uiMeter=0;
+    float eq[6]={.5f,.5f,.5f,.5f,.5f,.5f};
+    float stereoWidth=.5f;
+    struct Filter { float z1=0,z2=0; } filters[2][6];
     VPXEditor editor;
 };
 extern "C" __declspec(dllexport) HRESULT VDJ_API DllGetClassObject(const GUID& clsid,const GUID& iid,void** object) {
