@@ -25,7 +25,7 @@ struct VPXEditor {
   RECT r={x,y,x+w,y+h};HBRUSH b=CreateSolidBrush(c);FillRect(dc,&r,b);DeleteObject(b);
  }
  static void frame(HDC dc,int x,int y,int w,int h,COLORREF c) {
-  HPEN p=CreatePen(PS_SOLID,1,c),*old=(HPEN)SelectObject(dc,p);HBRUSH* ob=(HBRUSH*)SelectObject(dc,GetStockObject(NULL_BRUSH));
+  HPEN p=CreatePen(PS_SOLID,1,c),*old=(HPEN)SelectObject(dc,p);HGDIOBJ ob=SelectObject(dc,GetStockObject(NULL_BRUSH));
   Rectangle(dc,x,y,x+w,y+h);SelectObject(dc,ob);SelectObject(dc,old);DeleteObject(p);
  }
  static void line(HDC dc,int x,int y,int x2,int y2,COLORREF c,int width=1){
