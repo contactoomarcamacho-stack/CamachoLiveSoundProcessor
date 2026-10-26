@@ -1,1 +1,10 @@
-PLACEHOLDER
+#include "PluginEditor.h"
+CamachoEditor::CamachoEditor(CamachoProcessor& p):AudioProcessorEditor(&p),processor(p){
+ const char* ids[]={"sub","bass","lowmid","highmid","treble","threshold","ratio","attack","release","input","output","ceiling"};
+ const char* names[]={"SUB Hz","BASS","LOW MID","HIGH MID","TREBLE","THRESHOLD","RATIO","ATTACK","RELEASE","INPUT","OUTPUT","CEILING"};
+ for(int i=0;i<12;++i){auto slider=std::make_unique<juce::Slider>();slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);slider->setTextBoxStyle(juce::Slider::TextBoxBelow,false,90,20);slider->setColour(juce::Slider::rotarySliderFillColourId,juce::Colours::orange);addAndMakeVisible(*slider);auto label=std::make_unique<juce::Label>();label->setText(names[i],juce::dontSendNotification);label->setJustificationType(juce::Justification::centred);label->setColour(juce::Label::textColourId,juce::Colours::white);addAndMakeVisible(*label);attachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.apvts,ids[i],*slider));sliders.push_back(std::move(slider));labels.push_back(std::move(label));}
+ presets.addItemList(juce::StringArray{"Flat / Reference","Plena Uruguay","Reggaeton","Cumbia","Vocal clarity"},1);presets.setSelectedId(1,juce::dontSendNotification);presets.onChange=[this]{processor.setPreset(presets.getSelectedId()-1);};addAndMakeVisible(presets);
+ addAndMakeVisible(bypass);bypassAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.apvts,"bypass",bypass);setSize(760,440);
+}
+void CamachoEditor::paint(juce::Graphics& g){g.fillAll(juce::Colour::fromRGB(18,22,29));g.setColour(juce::Colours::orange);g.setFont(juce::Font(juce::FontOptions(25.0f,juce::Font::bold)));g.drawText("CAMACHO  |  LIVE SOUND PROCESSOR",20,12,getWidth()-40,40,juce::Justification::centredLeft);g.setColour(juce::Colours::lightgrey);g.setFont(13.0f);g.drawText("STEREO EQ  /  COMPRESSOR  /  PEAK LIMITER",22,52,500,20,juce::Justification::centredLeft);}
+void CamachoEditor::resized(){presets.setBounds(450,58,190,25);bypass.setBounds(660,58,95,25);for(int i=0;i<(int)sliders.size();++i){int x=20+(i%6)*122;int y=110+(i/6)*155;labels[i]->setBounds(x,y,112,24);sliders[i]->setBounds(x,y+25,112,112);}}
