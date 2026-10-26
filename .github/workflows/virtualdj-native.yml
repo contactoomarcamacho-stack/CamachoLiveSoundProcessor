@@ -17,6 +17,7 @@ jobs:
           Invoke-WebRequest -Uri "https://virtualdj.com/developers/VirtualDJ8_SDK_20211003.zip" -OutFile "vdj-sdk.zip"
           Expand-Archive -Path "vdj-sdk.zip" -DestinationPath "vdj-sdk"
           Get-ChildItem vdj-sdk -Recurse -Filter vdjDsp8.h
+          Get-Content vdj-sdk/vdjDsp8.h
       - name: Compile native 64-bit DLL
         shell: cmd
         run: |
