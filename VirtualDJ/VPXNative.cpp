@@ -90,7 +90,9 @@ public:
     HRESULT VDJ_API OnStop() override { env=0; return S_OK; }
     HRESULT VDJ_API OnProcessSamples(float* buffer,int frames) override {
         if (!buffer || frames<=0 || bypass) return S_OK;
-        const float sr=(SampleRate>8000)?float(SampleRate):44100.0f;
+        const float sr=(SampleRate>=8000 && SampleRate<=384000)?float(SampleRate):44100.0f;
+        if(sr!=lastSampleRate){lastSampleRate=sr;env=0.f;lowL=lowR=highL=highR=0.f;transientEnv=0.f;for(auto& ch:filters)for(auto& f:ch)f={};}
+        const float smooth=1.f-std::exp(-1.f/(sr*.015f));
         const float aLow=1-std::exp(-6.2831853f*180/sr);
         const float aHigh=1-std::exp(-6.2831853f*3800/sr);
         const float gIn=std::pow(10.0f,((input-0.5f)*24)/20);
@@ -114,8 +116,12 @@ public:
             b2[k]=(1-alpha*A)/den; a1[k]=b1[k]; a2[k]=(1-alpha/A)/den;
         }
         for(int i=0;i<frames;++i) {
-            float l=std::isfinite(buffer[i*2])?buffer[i*2]*gIn:0;
-            float r=std::isfinite(buffer[i*2+1])?buffer[i*2+1]*gIn:0;
+            smoothIn+=smooth*(gIn-smoothIn);
+            smoothOut+=smooth*(gOut-smoothOut);
+            smoothWidth+=smooth*(stereoWidth*2.f-smoothWidth);
+            smoothLimit+=smooth*(limit-smoothLimit);
+            float l=std::isfinite(buffer[i*2])?std::clamp(buffer[i*2],-16.f,16.f)*smoothIn:0.f;
+            float r=std::isfinite(buffer[i*2+1])?std::clamp(buffer[i*2+1],-16.f,16.f)*smoothIn:0.f;
             lowL+=aLow*(l-lowL); lowR+=aLow*(r-lowR);
             highL+=aHigh*(l-highL); highR+=aHigh*(r-highR);
             l=lowL*gBass+(highL-lowL)*gMid+(l-highL)*gHigh;
@@ -129,7 +135,7 @@ public:
                 f.z2=b2[k]*x-a2[k]*y;
                 *ch[channel]=y;
             }
-            const float mid=.5f*(l+r),side=.5f*(l-r)*(stereoWidth*2.f);
+            const float mid=.5f*(l+r),side=.5f*(l-r)*smoothWidth;
             l=mid+side; r=mid-side;
             const float peak=std::max(std::abs(l),std::abs(r));
             correlationLL=.999f*correlationLL+.001f*l*l;
@@ -156,18 +162,20 @@ public:
             env=coef*env+(1-coef)*peak;
             const float level=std::max(env,1.0e-9f);
             const float gain=level>thr?std::pow(level/thr,1/compRatio-1):1;
-            float outL=std::clamp(l*gain*gOut,-limit,limit);
-            float outR=std::clamp(r*gain*gOut,-limit,limit);
+            float outL=std::clamp(l*gain*smoothOut,-smoothLimit,smoothLimit);
+            float outR=std::clamp(r*gain*smoothOut,-smoothLimit,smoothLimit);
             if(ditherMode){const float lsb=ditherMode==1?1.f/32768.f:1.f/8388608.f;
                 outL=std::clamp(outL+(random01()-random01())*lsb,-limit,limit);
                 outR=std::clamp(outR+(random01()-random01())*lsb,-limit,limit);
             }
-            buffer[i*2]=outL;buffer[i*2+1]=outR;
+            buffer[i*2]=std::isfinite(outL)?outL:0.f;
+            buffer[i*2+1]=std::isfinite(outR)?outR:0.f;
             if((i&255)==0) outputPeak=.93f*outputPeak+.07f*std::min(1.f,std::max(std::abs(buffer[i*2]),std::abs(buffer[i*2+1])));
         }
         return S_OK;
     }
 private:
+    float lastSampleRate=0.f,smoothIn=1.f,smoothOut=1.f,smoothWidth=1.f,smoothLimit=.95f;
     int bypass=0,reset=0;
     float input=.5f,bass=.5f,mid=.5f,treble=.5f,threshold=.6f,ratio=.25f,attack=.3f,releaseTime=.35f,ceiling=.92f,output=.5f;
     float env=0,lowL=0,lowR=0,highL=0,highR=0;
