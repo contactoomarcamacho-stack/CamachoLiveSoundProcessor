@@ -38,6 +38,10 @@ public:
         editor.params[8]=&attack; editor.params[9]=&releaseTime;
         for(int i=0;i<6;++i) editor.eq[i]=&eq[i];
         editor.stereoWidth=&stereoWidth;
+        editor.transient=&transient; editor.exciter=&exciter;
+        editor.reverb=&reverb; editor.delay=&delayMix;
+        editor.inputPeak=&inputPeak; editor.outputPeak=&outputPeak;
+        editor.preset=&preset;
         editor.bypass=&bypass; editor.meter=&uiMeter;
         ui->Type=VDJINTERFACE_DIALOG;
         ui->hWnd=editor.open(hInstance);
@@ -126,6 +130,21 @@ public:
             const float mid=.5f*(l+r),side=.5f*(l-r)*(stereoWidth*2.f);
             l=mid+side; r=mid-side;
             const float peak=std::max(std::abs(l),std::abs(r));
+            if((i&255)==0) inputPeak=.93f*inputPeak+.07f*std::min(1.f,peak);
+            const float tcoef=std::exp(-1.f/(sr*.025f));
+            transientEnv=tcoef*transientEnv+(1-tcoef)*peak;
+            const float tGain=std::clamp(1.f+(transient-.5f)*2.f*(peak-transientEnv)/(transientEnv+.1f),.25f,2.f);
+            l*=tGain;r*=tGain;
+            exciterLowL+=aHigh*(l-exciterLowL);exciterLowR+=aHigh*(r-exciterLowR);
+            l+=exciter*.35f*std::tanh((l-exciterLowL)*4.f);
+            r+=exciter*.35f*std::tanh((r-exciterLowR)*4.f);
+            const int tap=(delayPos+delaySize-std::min(delaySize-1,(int)(sr*.22f)))%delaySize;
+            const float dl=delayL[tap],dr=delayR[tap];
+            delayL[delayPos]=std::clamp(l+dl*.35f,-2.f,2.f);
+            delayR[delayPos]=std::clamp(r+dr*.35f,-2.f,2.f);
+            delayPos=(delayPos+1)%delaySize;
+            l+=dl*(delayMix*.45f+reverb*.25f);
+            r+=dr*(delayMix*.45f+reverb*.25f);
             if ((i & 255)==0) uiMeter=0.97f*uiMeter+0.03f*std::min(1.0f,peak);
             const float coef=peak>env?aAtk:aRel;
             env=coef*env+(1-coef)*peak;
@@ -133,6 +152,7 @@ public:
             const float gain=level>thr?std::pow(level/thr,1/compRatio-1):1;
             buffer[i*2]=std::clamp(l*gain*gOut,-limit,limit);
             buffer[i*2+1]=std::clamp(r*gain*gOut,-limit,limit);
+            if((i&255)==0) outputPeak=.93f*outputPeak+.07f*std::min(1.f,std::max(std::abs(buffer[i*2]),std::abs(buffer[i*2+1])));
         }
         return S_OK;
     }
@@ -141,6 +161,13 @@ private:
     float input=.5f,bass=.5f,mid=.5f,treble=.5f,threshold=.6f,ratio=.25f,attack=.3f,releaseTime=.35f,ceiling=.92f,output=.5f;
     float env=0,lowL=0,lowR=0,highL=0,highR=0;
     float uiMeter=0;
+    float transient=.5f,exciter=0.f,reverb=0.f,delayMix=0.f;
+    float inputPeak=0,outputPeak=0;
+    int preset=0;
+    float transientEnv=0,exciterLowL=0,exciterLowR=0;
+    static constexpr int delaySize=96000;
+    float delayL[delaySize]={},delayR[delaySize]={};
+    int delayPos=0;
     float eq[6]={.5f,.5f,.5f,.5f,.5f,.5f};
     float stereoWidth=.5f;
     struct Filter { float z1=0,z2=0; } filters[2][6];
