@@ -42,6 +42,8 @@ public:
         editor.reverb=&reverb; editor.delay=&delayMix;
         editor.inputPeak=&inputPeak; editor.outputPeak=&outputPeak;
         editor.preset=&preset;
+        editor.stereoCorrelation=&stereoCorrelation;
+        editor.ditherMode=&ditherMode;
         editor.bypass=&bypass; editor.meter=&uiMeter;
         ui->Type=VDJINTERFACE_DIALOG;
         ui->hWnd=editor.open(hInstance);
@@ -130,6 +132,10 @@ public:
             const float mid=.5f*(l+r),side=.5f*(l-r)*(stereoWidth*2.f);
             l=mid+side; r=mid-side;
             const float peak=std::max(std::abs(l),std::abs(r));
+            correlationLL=.999f*correlationLL+.001f*l*l;
+            correlationRR=.999f*correlationRR+.001f*r*r;
+            correlationLR=.999f*correlationLR+.001f*l*r;
+            if((i&255)==0)stereoCorrelation=std::clamp(correlationLR/std::sqrt(std::max(1.e-12f,correlationLL*correlationRR)),-1.f,1.f);
             if((i&255)==0) inputPeak=.93f*inputPeak+.07f*std::min(1.f,peak);
             const float tcoef=std::exp(-1.f/(sr*.025f));
             transientEnv=tcoef*transientEnv+(1-tcoef)*peak;
@@ -150,8 +156,13 @@ public:
             env=coef*env+(1-coef)*peak;
             const float level=std::max(env,1.0e-9f);
             const float gain=level>thr?std::pow(level/thr,1/compRatio-1):1;
-            buffer[i*2]=std::clamp(l*gain*gOut,-limit,limit);
-            buffer[i*2+1]=std::clamp(r*gain*gOut,-limit,limit);
+            float outL=std::clamp(l*gain*gOut,-limit,limit);
+            float outR=std::clamp(r*gain*gOut,-limit,limit);
+            if(ditherMode){const float lsb=ditherMode==1?1.f/32768.f:1.f/8388608.f;
+                outL=std::clamp(outL+(random01()-random01())*lsb,-limit,limit);
+                outR=std::clamp(outR+(random01()-random01())*lsb,-limit,limit);
+            }
+            buffer[i*2]=outL;buffer[i*2+1]=outR;
             if((i&255)==0) outputPeak=.93f*outputPeak+.07f*std::min(1.f,std::max(std::abs(buffer[i*2]),std::abs(buffer[i*2+1])));
         }
         return S_OK;
@@ -163,7 +174,10 @@ private:
     float uiMeter=0;
     float transient=.5f,exciter=0.f,reverb=0.f,delayMix=0.f;
     float inputPeak=0,outputPeak=0;
-    int preset=0;
+    int preset=0,ditherMode=0;
+    float stereoCorrelation=0,correlationLL=0,correlationRR=0,correlationLR=0;
+    unsigned int rng=0x9e3779b9u;
+    float random01(){rng^=rng<<13;rng^=rng>>17;rng^=rng<<5;return float(rng&0xffffffu)/16777216.f;}
     float transientEnv=0,exciterLowL=0,exciterLowR=0;
     static constexpr int delaySize=96000;
     float delayL[delaySize]={},delayR[delaySize]={};
