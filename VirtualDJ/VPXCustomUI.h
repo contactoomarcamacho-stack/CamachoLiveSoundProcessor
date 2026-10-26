@@ -20,6 +20,9 @@ struct VPXEditor {
  float* meter=nullptr;
  float* eq[6]={};
  float* stereoWidth=nullptr;
+ float *transient=nullptr,*exciter=nullptr,*reverb=nullptr,*delay=nullptr;
+ float *inputPeak=nullptr,*outputPeak=nullptr;
+ int* preset=nullptr;
  int selected=-1;
  static constexpr int W=1536,H=1024;
  struct Knob { int x,y,r,p; const char* name; };
@@ -96,12 +99,16 @@ struct VPXEditor {
   label(dc,987,659,"60       180        500        1.8k        6k       12k",13);
   label(dc,1145,345,"WIDTH: adjustable",13);
   label(dc,49,962,"OFF       2x        4x        8x       16x",15);
-  label(dc,410,965,"001 - Live Master (Default)",18);
-  label(dc,1118,967,"PEAK    RMS    LUFS",15);
+  label(dc,410,965,preset&&*preset==1?"002 - Punchy":"001 - Live Master (Default)",18);
+  char met[80];std::snprintf(met,sizeof(met),"IN %.0f%%  OUT %.0f%%",inputPeak?*inputPeak*100:0.f,outputPeak?*outputPeak*100:0.f);label(dc,1110,967,met,14);
   label(dc,1331,967,"16 bit     24 bit    OFF",15);
   label(dc,40,892,"ATTACK  /  RELEASE",14);label(dc,271,891,"ATTACK  /  SUSTAIN",14);
+  knob(dc,347,816,28,transient?*transient:.5f,col(27,163,255));
   label(dc,487,891,"MONO     STEREO     M/S",14);label(dc,793,890,"SOFT     MED     HARD",14);
-  label(dc,994,892,"ROOM      HALL      PLATE",14);label(dc,1314,891,"TIME    FEEDBACK   MIX",14);
+  knob(dc,855,816,28,exciter?*exciter:0.f,col(27,163,255));
+  label(dc,994,892,"ROOM      HALL      PLATE",14);
+  knob(dc,1110,816,28,reverb?*reverb:0.f,col(27,163,255));label(dc,1314,891,"TIME    FEEDBACK   MIX",14);
+  knob(dc,1404,816,28,delay?*delay:0.f,col(27,163,255));
   label(dc,1390,651,"TRUE PEAK",15);label(dc,32,658,"TUBE     TAPE     SOLID     CLASSIC",15);
  }
  static LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
@@ -121,9 +128,12 @@ struct VPXEditor {
     if(x>1400&&y<83){*self->bypass=!*self->bypass;InvalidateRect(h,nullptr,FALSE);return 0;}
     if(x>=964&&x<=1305&&y>=463&&y<=635){int k=std::clamp((x-962)/53,0,5);self->selected=100+k;SetCapture(h);}
     if(x>=1116&&x<=1383&&y>=91&&y<=367){self->selected=200;SetCapture(h);}
+    if(y>=760&&y<=890){if(x>=247&&x<454)self->selected=201;else if(x>=767&&x<957)self->selected=202;else if(x>=964&&x<1278)self->selected=203;else if(x>=1285&&x<1528)self->selected=204; if(self->selected>=201)SetCapture(h);}
+    if(x>=319&&x<=1095&&y>=940&&y<=1014){*self->preset=1-*self->preset;*self->transient=*self->preset?.7f:.5f;*self->exciter=*self->preset?.2f:0.f;*self->reverb=0;*self->delay=0;InvalidateRect(h,nullptr,FALSE);return 0;}
     for(int i=0;i<(int)self->knobs.size();++i){auto& k=self->knobs[i];if(abs(x-k.x)<k.r+18&&abs(y-k.y)<k.r+18){self->selected=i;SetCapture(h);break;}}
    }
    if(self->selected>=100&&self->selected<106){int k=self->selected-100;*self->eq[k]=std::clamp((float)(635-y)/172.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
+   else if(self->selected>=201&&self->selected<=204){float* p=self->selected==201?self->transient:self->selected==202?self->exciter:self->selected==203?self->reverb:self->delay;*p=std::clamp((float)(875-y)/110.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
    else if(self->selected==200){*self->stereoWidth=std::clamp((float)(x-1116)/267.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
    else if(self->selected>=0){auto& k=self->knobs[self->selected];float v=std::clamp((float)(k.y+75-y)/150.f,0.f,1.f);*self->params[k.p]=v;InvalidateRect(h,nullptr,FALSE);}
    return 0;}
