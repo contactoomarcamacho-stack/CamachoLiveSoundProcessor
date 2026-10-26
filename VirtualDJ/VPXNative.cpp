@@ -3,6 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
 
 class VPXNative final : public IVdjPluginDsp8 {
 public:
