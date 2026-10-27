@@ -8,6 +8,7 @@
 #include "VPXPresets.h"
 #include "VPXLookaheadLimiter.h"
 #include "VPXMultiband.h"
+#include "VPXControlBank.h"
 #include <atomic>
 #ifdef min
 #undef min
@@ -36,19 +37,15 @@ public:
     }
     HRESULT VDJ_API OnGetUserInterface(TVdjPluginInterface8* ui) override {
         if (!ui) return E_POINTER;
-        editor.params[0]=&input; editor.params[1]=&treble; editor.params[2]=&output;
-        editor.params[3]=&bass; editor.params[4]=&mid; editor.params[5]=&threshold;
-        editor.params[6]=&ratio; editor.params[7]=&ceiling;
-        editor.params[8]=&attack; editor.params[9]=&releaseTime;
-        for(int i=0;i<6;++i) editor.eq[i]=&eq[i];
-        editor.stereoWidth=&stereoWidth;
-        editor.transient=&transient; editor.exciter=&exciter;
-        editor.reverb=&reverb; editor.delay=&delayMix;
-        editor.inputPeak=&inputPeak; editor.outputPeak=&outputPeak;
-        editor.preset=&preset;
-        editor.stereoCorrelation=&stereoCorrelation;
-        editor.ditherMode=&ditherMode;
-        editor.bypass=&bypass; editor.meter=&uiMeter;
+        for(int i=0;i<10;++i)editor.params[i]=&controls.knobs[i];
+        for(int i=0;i<6;++i)editor.eq[i]=&controls.eq[i];
+        editor.stereoWidth=&controls.width;
+        editor.transient=&controls.transient;editor.exciter=&controls.exciter;
+        editor.reverb=&controls.reverb;editor.delay=&controls.delay;
+        editor.inputPeak=&controls.inputPeak;editor.outputPeak=&controls.outputPeak;
+        editor.preset=&controls.preset;editor.stereoCorrelation=&controls.correlation;
+        editor.ditherMode=&controls.dither;editor.bypass=&controls.bypass;
+        editor.meter=&controls.meter;
         ui->Type=VDJINTERFACE_DIALOG;
         ui->hWnd=editor.open(hInstance);
         return ui->hWnd ? S_OK : E_FAIL;
@@ -58,6 +55,8 @@ public:
             input=bass=mid=treble=output=0.5f;
             threshold=0.6f; ratio=0.25f; attack=0.3f; releaseTime=0.35f; ceiling=0.92f;
             reset=0;
+            const float defaults[10]={.5f,.5f,.5f,.5f,.5f,.6f,.25f,.92f,.3f,.35f};
+            for(int i=0;i<10;++i)controls.setKnob(i,defaults[i]);
         }
         return S_OK;
     }
@@ -93,7 +92,14 @@ public:
     HRESULT VDJ_API OnStart() override { env=0; lowL=lowR=highL=highR=0; for(auto& ch:filters)for(auto& f:ch)f={}; limiter.reset((SampleRate>=8000&&SampleRate<=384000)?float(SampleRate):44100.f); multiband.reset((SampleRate>=8000&&SampleRate<=384000)?float(SampleRate):44100.f); return S_OK; }
     HRESULT VDJ_API OnStop() override { env=0; return S_OK; }
     HRESULT VDJ_API OnProcessSamples(float* buffer,int frames) override {
-        if (!buffer || frames<=0 || bypass) return S_OK;
+        if (!buffer || frames<=0) return S_OK;
+        // Host-owned float parameters remain SDK-compatible. Host automation is
+        // not yet synchronized back into ControlBank; see integration notes.
+        if(controls.bypass.load(std::memory_order_relaxed)) return S_OK;
+        const float uiKnobs[10]={controls.knobs[0].load(),controls.knobs[1].load(),controls.knobs[2].load(),controls.knobs[3].load(),controls.knobs[4].load(),controls.knobs[5].load(),controls.knobs[6].load(),controls.knobs[7].load(),controls.knobs[8].load(),controls.knobs[9].load()};
+        const float input=uiKnobs[0],treble=uiKnobs[1],output=uiKnobs[2],bass=uiKnobs[3],mid=uiKnobs[4],threshold=uiKnobs[5],ratio=uiKnobs[6],ceiling=uiKnobs[7],attack=uiKnobs[8],releaseTime=uiKnobs[9];
+        const float stereoWidth=controls.width.load(),transient=controls.transient.load(),exciter=controls.exciter.load(),reverb=controls.reverb.load(),delayMix=controls.delay.load();
+        const int ditherMode=controls.dither.load();
         const float sr=(SampleRate>=8000 && SampleRate<=384000)?float(SampleRate):44100.0f;
         if(sr!=lastSampleRate){lastSampleRate=sr;env=0.f;lowL=lowR=highL=highR=0.f;transientEnv=0.f;for(auto& ch:filters)for(auto& f:ch)f={};limiter.reset(sr);multiband.reset(sr);}
         const float smooth=1.f-std::exp(-1.f/(sr*.015f));
@@ -112,8 +118,8 @@ public:
         const float hz[6]={60,180,500,1800,6000,12000};
         float b0[6],b1[6],b2[6],a1[6],a2[6];
         for(int k=0;k<6;++k){
-            const int activePreset=std::clamp(preset.load(std::memory_order_relaxed),0,vpx::presetCount-1);
-            const float targetEq=activePreset==0?eq[k]:vpx::presets[activePreset].eq[k];
+            const int activePreset=std::clamp(controls.preset.load(std::memory_order_relaxed),0,vpx::presetCount-1);
+            const float targetEq=activePreset==0?controls.eq[k].load(std::memory_order_relaxed):vpx::presets[activePreset].eq[k];
             const float A=std::pow(10.f,((targetEq-.5f)*24.f)/40.f);
             const float omega=6.2831853f*std::min(hz[k],sr*.45f)/sr;
             const float alpha=std::sin(omega)/2.8f;
@@ -165,8 +171,8 @@ public:
             correlationLL=.999f*correlationLL+.001f*l*l;
             correlationRR=.999f*correlationRR+.001f*r*r;
             correlationLR=.999f*correlationLR+.001f*l*r;
-            if((i&255)==0)stereoCorrelation=std::clamp(correlationLR/std::sqrt(std::max(1.e-12f,correlationLL*correlationRR)),-1.f,1.f);
-            if((i&255)==0) inputPeak=.93f*inputPeak+.07f*std::min(1.f,peak);
+            if((i&255)==0)controls.correlation.store(std::clamp(correlationLR/std::sqrt(std::max(1.e-12f,correlationLL*correlationRR)),-1.f,1.f));
+            if((i&255)==0) controls.inputPeak.store(.93f*controls.inputPeak.load()+.07f*std::min(1.f,peak));
             const float tcoef=std::exp(-1.f/(sr*.025f));
             transientEnv=tcoef*transientEnv+(1-tcoef)*peak;
             const float tGain=std::clamp(1.f+(smoothTransient-.5f)*2.f*(peak-transientEnv)/(transientEnv+.1f),.25f,2.f);
@@ -181,7 +187,7 @@ public:
             delayPos=(delayPos+1)%delaySize;
             l+=dl*(smoothDelay*.45f+smoothReverb*.25f);
             r+=dr*(delayMix*.45f+reverb*.25f);
-            if ((i & 255)==0) uiMeter=0.97f*uiMeter+0.03f*std::min(1.0f,peak);
+            if ((i & 255)==0) controls.meter.store(.97f*controls.meter.load()+.03f*std::min(1.0f,peak));
             const float coef=peak>env?aAtk:aRel;
             env=coef*env+(1-coef)*peak;
             const float level=std::max(env,1.0e-9f);
@@ -195,11 +201,12 @@ public:
             }
             buffer[i*2]=std::isfinite(outL)?outL:0.f;
             buffer[i*2+1]=std::isfinite(outR)?outR:0.f;
-            if((i&255)==0) outputPeak=.93f*outputPeak+.07f*std::min(1.f,std::max(std::abs(buffer[i*2]),std::abs(buffer[i*2+1])));
+            if((i&255)==0) controls.outputPeak.store(.93f*controls.outputPeak.load()+.07f*std::min(1.f,std::max(std::abs(buffer[i*2]),std::abs(buffer[i*2+1]))));
         }
         return S_OK;
     }
 private:
+    vpx::ControlBank controls;
     vpx::LookaheadLimiter limiter;
     vpx::MultibandLR4 multiband;
     float lastSampleRate=0.f,smoothIn=1.f,smoothOut=1.f,smoothWidth=1.f,smoothLimit=.95f;
