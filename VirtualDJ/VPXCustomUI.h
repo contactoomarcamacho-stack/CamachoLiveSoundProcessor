@@ -23,8 +23,8 @@ struct VPXEditor {
  std::atomic<float>* meter=nullptr;
  std::atomic<float>* eq[6]={};
  std::atomic<float>* stereoWidth=nullptr;
- std::atomic<float> transient->load()=nullptr,exciter->load()=nullptr,reverb->load()=nullptr,delay->load()=nullptr;
- std::atomic<float> inputPeak->load()=nullptr,outputPeak->load()=nullptr;
+ std::atomic<float> *transient=nullptr,*exciter=nullptr,*reverb=nullptr,*delay=nullptr;
+ std::atomic<float> *inputPeak=nullptr,*outputPeak=nullptr;
  std::atomic<int>* preset=nullptr;
  std::atomic<int>* ditherMode=nullptr;
  std::atomic<float>* stereoCorrelation=nullptr;
