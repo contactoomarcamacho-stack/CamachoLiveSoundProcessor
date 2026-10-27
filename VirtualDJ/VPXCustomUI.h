@@ -14,19 +14,20 @@
 #include <string>
 #include <atomic>
 #include "VPXPresets.h"
+#include "VPXControlBank.h"
 
 struct VPXEditor {
  HWND hwnd=nullptr;
- float* params[10]={};
- int* bypass=nullptr;
- float* meter=nullptr;
- float* eq[6]={};
- float* stereoWidth=nullptr;
- float *transient=nullptr,*exciter=nullptr,*reverb=nullptr,*delay=nullptr;
- float *inputPeak=nullptr,*outputPeak=nullptr;
+ std::atomic<float>* params[10]={};
+ std::atomic<int>* bypass=nullptr;
+ std::atomic<float>* meter=nullptr;
+ std::atomic<float>* eq[6]={};
+ std::atomic<float>* stereoWidth=nullptr;
+ std::atomic<float> *transient=nullptr,*exciter=nullptr,*reverb=nullptr,*delay=nullptr;
+ std::atomic<float> *inputPeak=nullptr,*outputPeak=nullptr;
  std::atomic<int>* preset=nullptr;
- int* ditherMode=nullptr;
- float* stereoCorrelation=nullptr;
+ std::atomic<int>* ditherMode=nullptr;
+ std::atomic<float>* stereoCorrelation=nullptr;
  int selected=-1;
  static constexpr int W=1536,H=1024;
  struct Knob { int x,y,r,p; const char* name; };
@@ -140,7 +141,7 @@ struct VPXEditor {
     for(int i=0;i<(int)self->knobs.size();++i){auto& k=self->knobs[i];if(abs(x-k.x)<k.r+18&&abs(y-k.y)<k.r+18){self->selected=i;SetCapture(h);break;}}
    }
    if(self->selected>=100&&self->selected<106){int k=self->selected-100;self->preset->store(0,std::memory_order_relaxed);*self->eq[k]=std::clamp((float)(635-y)/172.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
-   else if(self->selected>=201&&self->selected<=204){float* p=self->selected==201?self->transient:self->selected==202?self->exciter:self->selected==203?self->reverb:self->delay;*p=std::clamp((float)(875-y)/110.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
+   else if(self->selected>=201&&self->selected<=204){std::atomic<float>* p=self->selected==201?self->transient:self->selected==202?self->exciter:self->selected==203?self->reverb:self->delay;*p=std::clamp((float)(875-y)/110.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
    else if(self->selected==200){*self->stereoWidth=std::clamp((float)(x-1116)/267.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
    else if(self->selected>=0){auto& k=self->knobs[self->selected];float v=std::clamp((float)(k.y+75-y)/150.f,0.f,1.f);*self->params[k.p]=v;InvalidateRect(h,nullptr,FALSE);}
    return 0;}
