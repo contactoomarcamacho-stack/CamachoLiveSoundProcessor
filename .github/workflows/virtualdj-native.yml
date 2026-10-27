@@ -29,6 +29,8 @@ jobs:
           call "%ProgramFiles%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /O2 /W4 /I "VirtualDJ" "VirtualDJ\VPXLimiterTests.cpp" /Fe:VPXLimiterTests.exe
           VPXLimiterTests.exe
+          cl /nologo /std:c++17 /EHsc /O2 /W4 /I "VirtualDJ" "VirtualDJ\VPXMultibandTests.cpp" /Fe:VPXMultibandTests.exe
+          VPXMultibandTests.exe
       - uses: actions/upload-artifact@v4
         with:
           name: VPX-PRO-VirtualDJ-64bit-DLL
