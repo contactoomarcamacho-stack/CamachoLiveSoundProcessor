@@ -7,6 +7,7 @@
 #include "VPXCustomUI.h"
 #include "VPXPresets.h"
 #include "VPXLookaheadLimiter.h"
+#include "VPXMultiband.h"
 #include <atomic>
 #ifdef min
 #undef min
@@ -83,18 +84,18 @@ public:
         info->PluginName="VPX PRO MASTERING PROCESSOR";
         info->Author="VPX";
         info->Description="Stereo EQ, compressor, linked lookahead limiter and adjustable gain";
-        info->Version="4.2";
+        info->Version="4.3";
         info->Flags=0;
         info->Bitmap=NULL;
         return S_OK;
     }
     ULONG VDJ_API Release() override { if(editor.hwnd && IsWindow(editor.hwnd)) DestroyWindow(editor.hwnd); delete this; return 0; }
-    HRESULT VDJ_API OnStart() override { env=0; lowL=lowR=highL=highR=0; for(auto& ch:filters)for(auto& f:ch)f={}; limiter.reset((SampleRate>=8000&&SampleRate<=384000)?float(SampleRate):44100.f); return S_OK; }
+    HRESULT VDJ_API OnStart() override { env=0; lowL=lowR=highL=highR=0; for(auto& ch:filters)for(auto& f:ch)f={}; limiter.reset((SampleRate>=8000&&SampleRate<=384000)?float(SampleRate):44100.f); multiband.reset((SampleRate>=8000&&SampleRate<=384000)?float(SampleRate):44100.f); return S_OK; }
     HRESULT VDJ_API OnStop() override { env=0; return S_OK; }
     HRESULT VDJ_API OnProcessSamples(float* buffer,int frames) override {
         if (!buffer || frames<=0 || bypass) return S_OK;
         const float sr=(SampleRate>=8000 && SampleRate<=384000)?float(SampleRate):44100.0f;
-        if(sr!=lastSampleRate){lastSampleRate=sr;env=0.f;lowL=lowR=highL=highR=0.f;transientEnv=0.f;for(auto& ch:filters)for(auto& f:ch)f={};limiter.reset(sr);}
+        if(sr!=lastSampleRate){lastSampleRate=sr;env=0.f;lowL=lowR=highL=highR=0.f;transientEnv=0.f;for(auto& ch:filters)for(auto& f:ch)f={};limiter.reset(sr);multiband.reset(sr);}
         const float smooth=1.f-std::exp(-1.f/(sr*.015f));
         const float aLow=1-std::exp(-6.2831853f*180/sr);
         const float aHigh=1-std::exp(-6.2831853f*3800/sr);
@@ -157,6 +158,7 @@ public:
                 if(!std::isfinite(f.z1)||!std::isfinite(f.z2)){f.z1=0.f;f.z2=0.f;}
                 *ch[channel]=y;
             }
+            multiband.process(l,r);
             const float mid=.5f*(l+r),side=.5f*(l-r)*smoothWidth;
             l=mid+side; r=mid-side;
             const float peak=std::max(std::abs(l),std::abs(r));
@@ -199,6 +201,7 @@ public:
     }
 private:
     vpx::LookaheadLimiter limiter;
+    vpx::MultibandLR4 multiband;
     float lastSampleRate=0.f,smoothIn=1.f,smoothOut=1.f,smoothWidth=1.f,smoothLimit=.95f;
     float smoothBass=1.f,smoothMid=1.f,smoothTreble=1.f,smoothThreshold=.5f,smoothRatio=2.f;
     float smoothTransient=.5f,smoothExciter=0.f,smoothReverb=0.f,smoothDelay=0.f;
