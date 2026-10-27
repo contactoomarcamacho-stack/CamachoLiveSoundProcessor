@@ -5,6 +5,8 @@
 #include <cstring>
 #include <cstdio>
 #include "VPXCustomUI.h"
+#include "VPXPresets.h"
+#include <atomic>
 #ifdef min
 #undef min
 #endif
@@ -108,7 +110,9 @@ public:
         const float hz[6]={60,180,500,1800,6000,12000};
         float b0[6],b1[6],b2[6],a1[6],a2[6];
         for(int k=0;k<6;++k){
-            const float A=std::pow(10.f,((eq[k]-.5f)*24.f)/40.f);
+            const int activePreset=std::clamp(preset.load(std::memory_order_relaxed),0,vpx::presetCount-1);
+            const float targetEq=activePreset==0?eq[k]:vpx::presets[activePreset].eq[k];
+            const float A=std::pow(10.f,((targetEq-.5f)*24.f)/40.f);
             const float omega=6.2831853f*std::min(hz[k],sr*.45f)/sr;
             const float alpha=std::sin(omega)/2.8f;
             const float den=1.f+alpha/A;
@@ -202,7 +206,8 @@ private:
     float uiMeter=0;
     float transient=.5f,exciter=0.f,reverb=0.f,delayMix=0.f;
     float inputPeak=0,outputPeak=0;
-    int preset=0,ditherMode=0;
+    std::atomic<int> preset{0};
+    int ditherMode=0;
     float stereoCorrelation=0,correlationLL=0,correlationRR=0,correlationLR=0;
     unsigned int rng=0x9e3779b9u;
     float random01(){rng^=rng<<13;rng^=rng>>17;rng^=rng<<5;return float(rng&0xffffffu)/16777216.f;}
