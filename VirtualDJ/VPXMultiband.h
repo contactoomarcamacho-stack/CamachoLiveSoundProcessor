@@ -43,39 +43,47 @@ public:
             high120_[ch].design(120.f,sr_,true);
             mid_[ch].design(2500.f,sr_,false);
             high2500_[ch].design(2500.f,sr_,true);
-            for(int b=0;b<3;++b)env_[ch][b]=0.f;
+            // Phase compensation: low band receives the all-pass response
+            // of the second crossover, matching the high120 split branches.
+            lowPhaseLP_[ch].design(2500.f,sr_,false);
+            lowPhaseHP_[ch].design(2500.f,sr_,true);
         }
-        const float attack=std::exp(-1.f/(.010f*sr_));
-        const float release=std::exp(-1.f/(.150f*sr_));
-        attack_=attack;release_=release;
+        for(float& e:env_)e=0.f;
+        attack_=std::exp(-1.f/(.010f*sr_));
+        release_=std::exp(-1.f/(.150f*sr_));
     }
-    // Three independent detectors; fixed crossover frequencies and conservative
-    // 2:1 compression above -12 dBFS. No heap allocation in process().
+    // Stereo-linked envelope for each band; no allocations or locks.
     void process(float& l,float& r) noexcept {
-        float* channels[2]={&l,&r};
+        const float input[2]={
+            std::isfinite(l)?std::clamp(l,-16.f,16.f):0.f,
+            std::isfinite(r)?std::clamp(r,-16.f,16.f):0.f
+        };
+        float bands[2][3]{};
         for(int ch=0;ch<2;++ch){
-            const float x=std::isfinite(*channels[ch])?std::clamp(*channels[ch],-16.f,16.f):0.f;
-            const float clean=sub_[ch].process(x);
-            float bands[3]={
-                low_[ch].process(clean),
-                mid_[ch].process(high120_[ch].process(clean)),
-                high2500_[ch].process(clean)
-            };
-            float out=0.f;
-            for(int b=0;b<3;++b){
-                const float peak=std::fabs(bands[b]);
-                const float coef=peak>env_[ch][b]?attack_:release_;
-                env_[ch][b]=coef*env_[ch][b]+(1.f-coef)*peak;
-                const float level=std::max(env_[ch][b],1.e-8f);
-                const float gain=level>.25118864f?std::sqrt(.25118864f/level):1.f;
-                out+=bands[b]*gain;
-            }
-            *channels[ch]=std::isfinite(out)?out:0.f;
+            const float clean=sub_[ch].process(input[ch]);
+            const float low=low_[ch].process(clean);
+            const float upper=high120_[ch].process(clean);
+            bands[ch][0]=lowPhaseLP_[ch].process(low)+lowPhaseHP_[ch].process(low);
+            bands[ch][1]=mid_[ch].process(upper);
+            bands[ch][2]=high2500_[ch].process(upper);
         }
+        for(int b=0;b<3;++b){
+            const float peak=std::max(std::fabs(bands[0][b]),std::fabs(bands[1][b]));
+            const float coef=peak>env_[b]?attack_:release_;
+            env_[b]=coef*env_[b]+(1.f-coef)*peak;
+            const float level=std::max(env_[b],1.e-8f);
+            const float gain=level>.25118864f?std::sqrt(.25118864f/level):1.f;
+            bands[0][b]*=gain;bands[1][b]*=gain;
+        }
+        l=bands[0][0]+bands[0][1]+bands[0][2];
+        r=bands[1][0]+bands[1][1]+bands[1][2];
+        if(!std::isfinite(l))l=0.f;
+        if(!std::isfinite(r))r=0.f;
     }
 private:
     float sr_=44100.f,attack_=0.f,release_=0.f;
     LR4 sub_[2],low_[2],high120_[2],mid_[2],high2500_[2];
-    float env_[2][3]{};
+    LR4 lowPhaseLP_[2],lowPhaseHP_[2];
+    float env_[3]{};
 };
 }
