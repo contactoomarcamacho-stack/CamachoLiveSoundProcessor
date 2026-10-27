@@ -12,6 +12,8 @@
 #include <cstdio>
 #include <vector>
 #include <string>
+#include <atomic>
+#include "VPXPresets.h"
 
 struct VPXEditor {
  HWND hwnd=nullptr;
@@ -22,7 +24,7 @@ struct VPXEditor {
  float* stereoWidth=nullptr;
  float *transient=nullptr,*exciter=nullptr,*reverb=nullptr,*delay=nullptr;
  float *inputPeak=nullptr,*outputPeak=nullptr;
- int* preset=nullptr;
+ std::atomic<int>* preset=nullptr;
  int* ditherMode=nullptr;
  float* stereoCorrelation=nullptr;
  int selected=-1;
@@ -97,11 +99,13 @@ struct VPXEditor {
    char buf[50];std::snprintf(buf,sizeof(buf),"%s  %.0f%%",k.name,v*100);label(dc,k.x-k.r,k.y+k.r+17,buf,13);}
   for(int i=0;i<4;++i){char t[30];std::snprintf(t,sizeof(t),"BAND %d",i+1);label(dc,408+i*135,432,t,15);}
   for(int i=0;i<6;++i){int x=973+i*51;line(dc,x,463,x,635,col(28,57,77));}
-  for(int i=0;i<6;++i){int x=978+i*53;int y=635-(int)((eq[i]?*eq[i]:.5f)*172);knob(dc,x,y,11,eq[i]?*eq[i]:.5f,col(25,168,255));}
+  for(int i=0;i<6;++i){int x=978+i*53;int p=preset?std::clamp(preset->load(std::memory_order_relaxed),0,vpx::presetCount-1):0;float v=p==0?(eq[i]?*eq[i]:.5f):vpx::presets[p].eq[i];int y=635-(int)(v*172);knob(dc,x,y,11,v,col(25,168,255));}
   label(dc,987,659,"60       180        500        1.8k        6k       12k",13);
   char stereoText[90];std::snprintf(stereoText,sizeof(stereoText),"WIDTH %.0f%%  CORR %+.2f",stereoWidth?*stereoWidth*200.f:100.f,stereoCorrelation?*stereoCorrelation:0.f);label(dc,1145,345,stereoText,13);
   label(dc,49,962,"Not implemented",15);
-  label(dc,410,965,preset&&*preset==1?"002 - Punchy":"001 - Live Master (Default)",18);
+  const int presetIndex=preset?std::clamp(preset->load(std::memory_order_relaxed),0,vpx::presetCount-1):0;
+  char presetLabel[100];std::snprintf(presetLabel,sizeof(presetLabel),"%02d - %s   [ CLICK TO SELECT ]",presetIndex+1,vpx::presets[presetIndex].name);
+  label(dc,410,965,presetLabel,18);
   char met[80];std::snprintf(met,sizeof(met),"IN %.0f%%  OUT %.0f%%",inputPeak?*inputPeak*100:0.f,outputPeak?*outputPeak*100:0.f);label(dc,1110,967,met,14);
   label(dc,1331,967,ditherMode&&*ditherMode==1?"DITHER: 16 BIT":ditherMode&&*ditherMode==2?"DITHER: 24 BIT":"DITHER: OFF",15);
   label(dc,40,892,"ATTACK  /  RELEASE",14);label(dc,271,891,"ATTACK  /  SUSTAIN",14);
@@ -132,10 +136,10 @@ struct VPXEditor {
     if(x>=1116&&x<=1383&&y>=91&&y<=367){self->selected=200;SetCapture(h);}
     if(y>=760&&y<=890){if(x>=247&&x<454)self->selected=201;else if(x>=767&&x<957)self->selected=202;else if(x>=964&&x<1278)self->selected=203;else if(x>=1285&&x<1528)self->selected=204; if(self->selected>=201)SetCapture(h);}
     if(x>=1302&&x<=1528&&y>=940&&y<=1014){*self->ditherMode=(*self->ditherMode+1)%3;InvalidateRect(h,nullptr,FALSE);return 0;}
-    if(x>=319&&x<=1095&&y>=940&&y<=1014){*self->preset=1-*self->preset;*self->transient=*self->preset?.7f:.5f;*self->exciter=*self->preset?.2f:0.f;*self->reverb=0;*self->delay=0;InvalidateRect(h,nullptr,FALSE);return 0;}
+    if(x>=319&&x<=1095&&y>=940&&y<=1014){HMENU menu=CreatePopupMenu();if(menu){for(int i=0;i<vpx::presetCount;++i)AppendMenuA(menu,MF_STRING|((self->preset->load(std::memory_order_relaxed)==i)?MF_CHECKED:0),1000+i,vpx::presets[i].name);POINT pt;GetCursorPos(&pt);int cmd=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,pt.x,pt.y,0,h,nullptr);DestroyMenu(menu);if(cmd>=1000&&cmd<1000+vpx::presetCount)self->preset->store(cmd-1000,std::memory_order_relaxed);}InvalidateRect(h,nullptr,FALSE);return 0;}
     for(int i=0;i<(int)self->knobs.size();++i){auto& k=self->knobs[i];if(abs(x-k.x)<k.r+18&&abs(y-k.y)<k.r+18){self->selected=i;SetCapture(h);break;}}
    }
-   if(self->selected>=100&&self->selected<106){int k=self->selected-100;*self->eq[k]=std::clamp((float)(635-y)/172.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
+   if(self->selected>=100&&self->selected<106){int k=self->selected-100;self->preset->store(0,std::memory_order_relaxed);*self->eq[k]=std::clamp((float)(635-y)/172.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
    else if(self->selected>=201&&self->selected<=204){float* p=self->selected==201?self->transient:self->selected==202?self->exciter:self->selected==203?self->reverb:self->delay;*p=std::clamp((float)(875-y)/110.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
    else if(self->selected==200){*self->stereoWidth=std::clamp((float)(x-1116)/267.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
    else if(self->selected>=0){auto& k=self->knobs[self->selected];float v=std::clamp((float)(k.y+75-y)/150.f,0.f,1.f);*self->params[k.p]=v;InvalidateRect(h,nullptr,FALSE);}
