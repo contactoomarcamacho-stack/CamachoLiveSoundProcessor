@@ -23,8 +23,8 @@ struct VPXEditor {
  std::atomic<float>* meter=nullptr;
  std::atomic<float>* eq[6]={};
  std::atomic<float>* stereoWidth=nullptr;
- std::atomic<float> *transient=nullptr,*exciter=nullptr,*reverb=nullptr,*delay=nullptr;
- std::atomic<float> *inputPeak=nullptr,*outputPeak=nullptr;
+ std::atomic<float> transient->load()=nullptr,exciter->load()=nullptr,reverb->load()=nullptr,delay->load()=nullptr;
+ std::atomic<float> inputPeak->load()=nullptr,outputPeak->load()=nullptr;
  std::atomic<int>* preset=nullptr;
  std::atomic<int>* ditherMode=nullptr;
  std::atomic<float>* stereoCorrelation=nullptr;
@@ -72,18 +72,18 @@ struct VPXEditor {
   label(dc,34,8,"VPX",62,col(234,242,255),true);label(dc,211,16,"PRO",45,col(16,163,252),true);
   label(dc,213,61,"MASTERING PROCESSOR",13);label(dc,409,48,"MULTIBAND  /  DYNAMICS  /  LIMITER  /  SATURATION  /  STEREO  /  MASTERING",13,col(160,190,216));
   rect(dc,849,24,300,42,col(8,18,30));label(dc,871,37,"001 - LIVE MASTER (Default)",17);
-  rect(dc,1410,22,109,45,*bypass?col(76,23,30):col(9,59,103));label(dc,1422,34,*bypass?"BYPASSED":"BYPASS",18);
+  rect(dc,1410,22,109,45,bypass->load()?col(76,23,30):col(9,59,103));label(dc,1422,34,bypass->load()?"BYPASSED":"BYPASS",18);
   panel(dc,17,91,123,276,"INPUT");panel(dc,148,91,961,276,"SPECTRUM (VISUAL DEMO ONLY)");
   panel(dc,1116,91,267,276,"STEREO FIELD");panel(dc,1391,91,127,276,"OUTPUT");
-  for(int i=0;i<2;++i){int x=44+i*38;rect(dc,x,157,20,170,col(17,36,50));float m=meter?std::min(1.f,std::max(0.f,*meter)):0.55f;int h=(int)(170*m);
+  for(int i=0;i<2;++i){int x=44+i*38;rect(dc,x,157,20,170,col(17,36,50));float m=meter?std::min(1.f,std::max(0.f,meter->load())):0.55f;int h=(int)(170*m);
    for(int j=0;j<h;j+=6)rect(dc,x,327-j,19,5,j>133?col(255,64,49):j>100?col(251,196,20):col(28,222,83));}
-  for(int i=0;i<2;++i){int x=1420+i*39;rect(dc,x,157,20,170,col(17,36,50));float m=meter?std::min(1.f,std::max(0.f,*meter)):0.55f;int h=(int)(170*m*.92f);
+  for(int i=0;i<2;++i){int x=1420+i*39;rect(dc,x,157,20,170,col(17,36,50));float m=meter?std::min(1.f,std::max(0.f,meter->load())):0.55f;int h=(int)(170*m*.92f);
    for(int j=0;j<h;j+=6)rect(dc,x,327-j,19,5,j>133?col(255,64,49):j>100?col(251,196,20):col(28,222,83));}
   rect(dc,169,142,850,188,col(5,19,33));
   for(int i=0;i<28;++i){int x=169+i*31;line(dc,x,142,x,330,col(17,48,71));}
   for(int i=0;i<9;++i){int y=142+i*23;line(dc,169,y,1019,y,col(17,48,71));}
   for(int i=0;i<180;++i){int x=175+i*4;float v=.24f+.3f*std::sin(i*.2f)*std::sin(i*.71f)+.15f*std::sin(i*.09f);
-   float m=meter?std::min(1.f,std::max(0.f,*meter)):0.5f;int hh=(int)(std::max(.03f,v)*m*280);
+   float m=meter?std::min(1.f,std::max(0.f,meter->load())):0.5f;int hh=(int)(std::max(.03f,v)*m*280);
    rect(dc,x,325-hh,2,hh,col(9,155+(i%4)*18,242));}
   label(dc,185,338,"20        50          100           200          500            1k            2k             5k             10k           20k",13,col(158,193,221));
   for(int i=0;i<9;++i){int x=1144+i*25;line(dc,1245,146,x,226,col(12,112,201));line(dc,1245,302,x,226,col(12,112,201));}
@@ -96,26 +96,26 @@ struct VPXEditor {
   panel(dc,10,940,300,74,"OVERSAMPLING (NOT ACTIVE)");panel(dc,319,940,776,74,"PRESETS");
   panel(dc,1103,940,192,74,"OUTPUT METERING");panel(dc,1302,940,226,74,"DITHER");
   const COLORREF colors[]={col(22,161,255),col(27,158,255),col(27,158,255),col(251,75,67),col(244,183,34),col(36,222,90),col(31,153,255),col(255,69,62),col(30,163,252),col(30,163,252)};
-  for(const auto& k:knobs){float v=params[k.p]?*params[k.p]:.5f;knob(dc,k.x,k.y,k.r,v,colors[k.p]);
+  for(const auto& k:knobs){float v=params[k.p]?params[k.p]->load():.5f;knob(dc,k.x,k.y,k.r,v,colors[k.p]);
    char buf[50];std::snprintf(buf,sizeof(buf),"%s  %.0f%%",k.name,v*100);label(dc,k.x-k.r,k.y+k.r+17,buf,13);}
   for(int i=0;i<4;++i){char t[30];std::snprintf(t,sizeof(t),"BAND %d",i+1);label(dc,408+i*135,432,t,15);}
   for(int i=0;i<6;++i){int x=973+i*51;line(dc,x,463,x,635,col(28,57,77));}
-  for(int i=0;i<6;++i){int x=978+i*53;int p=preset?std::clamp(preset->load(std::memory_order_relaxed),0,vpx::presetCount-1):0;float v=p==0?(eq[i]?*eq[i]:.5f):vpx::presets[p].eq[i];int y=635-(int)(v*172);knob(dc,x,y,11,v,col(25,168,255));}
+  for(int i=0;i<6;++i){int x=978+i*53;int p=preset?std::clamp(preset->load(std::memory_order_relaxed),0,vpx::presetCount-1):0;float v=p==0?(eq[i]?eq[i]->load():.5f):vpx::presets[p].eq[i];int y=635-(int)(v*172);knob(dc,x,y,11,v,col(25,168,255));}
   label(dc,987,659,"60       180        500        1.8k        6k       12k",13);
-  char stereoText[90];std::snprintf(stereoText,sizeof(stereoText),"WIDTH %.0f%%  CORR %+.2f",stereoWidth?*stereoWidth*200.f:100.f,stereoCorrelation?*stereoCorrelation:0.f);label(dc,1145,345,stereoText,13);
+  char stereoText[90];std::snprintf(stereoText,sizeof(stereoText),"WIDTH %.0f%%  CORR %+.2f",stereoWidth?stereoWidth->load()*200.f:100.f,stereoCorrelation?stereoCorrelation->load():0.f);label(dc,1145,345,stereoText,13);
   label(dc,49,962,"Not implemented",15);
   const int presetIndex=preset?std::clamp(preset->load(std::memory_order_relaxed),0,vpx::presetCount-1):0;
   char presetLabel[100];std::snprintf(presetLabel,sizeof(presetLabel),"%02d - %s   [ CLICK TO SELECT ]",presetIndex+1,vpx::presets[presetIndex].name);
   label(dc,410,965,presetLabel,18);
-  char met[80];std::snprintf(met,sizeof(met),"IN %.0f%%  OUT %.0f%%",inputPeak?*inputPeak*100:0.f,outputPeak?*outputPeak*100:0.f);label(dc,1110,967,met,14);
-  label(dc,1331,967,ditherMode&&*ditherMode==1?"DITHER: 16 BIT":ditherMode&&*ditherMode==2?"DITHER: 24 BIT":"DITHER: OFF",15);
+  char met[80];std::snprintf(met,sizeof(met),"IN %.0f%%  OUT %.0f%%",inputPeak?inputPeak->load()*100:0.f,outputPeak?outputPeak->load()*100:0.f);label(dc,1110,967,met,14);
+  label(dc,1331,967,ditherMode&&ditherMode->load()==1?"DITHER: 16 BIT":ditherMode&&ditherMode->load()==2?"DITHER: 24 BIT":"DITHER: OFF",15);
   label(dc,40,892,"ATTACK  /  RELEASE",14);label(dc,271,891,"ATTACK  /  SUSTAIN",14);
-  knob(dc,347,816,28,transient?*transient:.5f,col(27,163,255));
+  knob(dc,347,816,28,transient?transient->load():.5f,col(27,163,255));
   label(dc,487,891,"MONO     STEREO     M/S",14);label(dc,793,890,"SOFT     MED     HARD",14);
-  knob(dc,855,816,28,exciter?*exciter:0.f,col(27,163,255));
+  knob(dc,855,816,28,exciter?exciter->load():0.f,col(27,163,255));
   label(dc,994,892,"ROOM      HALL      PLATE",14);
-  knob(dc,1110,816,28,reverb?*reverb:0.f,col(27,163,255));label(dc,1314,891,"TIME    FEEDBACK   MIX",14);
-  knob(dc,1404,816,28,delay?*delay:0.f,col(27,163,255));
+  knob(dc,1110,816,28,reverb?reverb->load():0.f,col(27,163,255));label(dc,1314,891,"TIME    FEEDBACK   MIX",14);
+  knob(dc,1404,816,28,delay?delay->load():0.f,col(27,163,255));
   label(dc,1390,651,"SAMPLE PEAK",15);label(dc,32,658,"Input gain and tonal controls",15);
  }
  static LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
@@ -140,10 +140,10 @@ struct VPXEditor {
     if(x>=319&&x<=1095&&y>=940&&y<=1014){HMENU menu=CreatePopupMenu();if(menu){for(int i=0;i<vpx::presetCount;++i)AppendMenuA(menu,MF_STRING|((self->preset->load(std::memory_order_relaxed)==i)?MF_CHECKED:0),1000+i,vpx::presets[i].name);POINT pt;GetCursorPos(&pt);int cmd=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_NONOTIFY,pt.x,pt.y,0,h,nullptr);DestroyMenu(menu);if(cmd>=1000&&cmd<1000+vpx::presetCount)self->preset->store(cmd-1000,std::memory_order_relaxed);}InvalidateRect(h,nullptr,FALSE);return 0;}
     for(int i=0;i<(int)self->knobs.size();++i){auto& k=self->knobs[i];if(abs(x-k.x)<k.r+18&&abs(y-k.y)<k.r+18){self->selected=i;SetCapture(h);break;}}
    }
-   if(self->selected>=100&&self->selected<106){int k=self->selected-100;self->preset->store(0,std::memory_order_relaxed);*self->eq[k]=std::clamp((float)(635-y)/172.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
-   else if(self->selected>=201&&self->selected<=204){std::atomic<float>* p=self->selected==201?self->transient:self->selected==202?self->exciter:self->selected==203?self->reverb:self->delay;*p=std::clamp((float)(875-y)/110.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
-   else if(self->selected==200){*self->stereoWidth=std::clamp((float)(x-1116)/267.f,0.f,1.f);InvalidateRect(h,nullptr,FALSE);}
-   else if(self->selected>=0){auto& k=self->knobs[self->selected];float v=std::clamp((float)(k.y+75-y)/150.f,0.f,1.f);*self->params[k.p]=v;InvalidateRect(h,nullptr,FALSE);}
+   if(self->selected>=100&&self->selected<106){int k=self->selected-100;self->preset->store(0,std::memory_order_relaxed);self->eq[k]->store(std::clamp((float)(635-y)/172.f,0.f,1.f));InvalidateRect(h,nullptr,FALSE);}
+   else if(self->selected>=201&&self->selected<=204){std::atomic<float>* p=self->selected==201?self->transient:self->selected==202?self->exciter:self->selected==203?self->reverb:self->delay;p->store(std::clamp((float)(875-y)/110.f,0.f,1.f));InvalidateRect(h,nullptr,FALSE);}
+   else if(self->selected==200){self->stereoWidth->store(std::clamp((float)(x-1116)/267.f,0.f,1.f));InvalidateRect(h,nullptr,FALSE);}
+   else if(self->selected>=0){auto& k=self->knobs[self->selected];float v=std::clamp((float)(k.y+75-y)/150.f,0.f,1.f);self->params[k.p]->store(v);InvalidateRect(h,nullptr,FALSE);}
    return 0;}
   if(m==WM_LBUTTONUP){self->selected=-1;ReleaseCapture();return 0;}
   if(m==WM_DESTROY){KillTimer(h,1);self->hwnd=nullptr;return 0;}
