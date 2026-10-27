@@ -31,6 +31,8 @@ jobs:
           VPXLimiterTests.exe
           cl /nologo /std:c++17 /EHsc /O2 /W4 /I "VirtualDJ" "VirtualDJ\VPXMultibandTests.cpp" /Fe:VPXMultibandTests.exe
           VPXMultibandTests.exe
+          cl /nologo /std:c++17 /EHsc /O2 /W4 /I "VirtualDJ" "VirtualDJ\VPXPhaseTests.cpp" /Fe:VPXPhaseTests.exe
+          VPXPhaseTests.exe
       - uses: actions/upload-artifact@v4
         with:
           name: VPX-PRO-VirtualDJ-64bit-DLL
