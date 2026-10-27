@@ -6,6 +6,7 @@
 #include <cstdio>
 #include "VPXCustomUI.h"
 #include "VPXPresets.h"
+#include "VPXLookaheadLimiter.h"
 #include <atomic>
 #ifdef min
 #undef min
@@ -81,19 +82,19 @@ public:
     HRESULT VDJ_API OnGetPluginInfo(TVdjPluginInfo8* info) override {
         info->PluginName="VPX PRO MASTERING PROCESSOR";
         info->Author="VPX";
-        info->Description="Stereo EQ, compressor, peak limiter and adjustable gain";
-        info->Version="4.1";
+        info->Description="Stereo EQ, compressor, linked lookahead limiter and adjustable gain";
+        info->Version="4.2";
         info->Flags=0;
         info->Bitmap=NULL;
         return S_OK;
     }
     ULONG VDJ_API Release() override { if(editor.hwnd && IsWindow(editor.hwnd)) DestroyWindow(editor.hwnd); delete this; return 0; }
-    HRESULT VDJ_API OnStart() override { env=0; lowL=lowR=highL=highR=0; for(auto& ch:filters)for(auto& f:ch)f={}; return S_OK; }
+    HRESULT VDJ_API OnStart() override { env=0; lowL=lowR=highL=highR=0; for(auto& ch:filters)for(auto& f:ch)f={}; limiter.reset((SampleRate>=8000&&SampleRate<=384000)?float(SampleRate):44100.f); return S_OK; }
     HRESULT VDJ_API OnStop() override { env=0; return S_OK; }
     HRESULT VDJ_API OnProcessSamples(float* buffer,int frames) override {
         if (!buffer || frames<=0 || bypass) return S_OK;
         const float sr=(SampleRate>=8000 && SampleRate<=384000)?float(SampleRate):44100.0f;
-        if(sr!=lastSampleRate){lastSampleRate=sr;env=0.f;lowL=lowR=highL=highR=0.f;transientEnv=0.f;for(auto& ch:filters)for(auto& f:ch)f={};}
+        if(sr!=lastSampleRate){lastSampleRate=sr;env=0.f;lowL=lowR=highL=highR=0.f;transientEnv=0.f;for(auto& ch:filters)for(auto& f:ch)f={};limiter.reset(sr);}
         const float smooth=1.f-std::exp(-1.f/(sr*.015f));
         const float aLow=1-std::exp(-6.2831853f*180/sr);
         const float aHigh=1-std::exp(-6.2831853f*3800/sr);
@@ -183,11 +184,12 @@ public:
             env=coef*env+(1-coef)*peak;
             const float level=std::max(env,1.0e-9f);
             const float gain=level>smoothThreshold?std::pow(level/smoothThreshold,1/smoothRatio-1):1;
-            float outL=std::clamp(l*gain*smoothOut,-smoothLimit,smoothLimit);
-            float outR=std::clamp(r*gain*smoothOut,-smoothLimit,smoothLimit);
+            float outL=l*gain*smoothOut;
+            float outR=r*gain*smoothOut;
+            limiter.process(outL,outR,smoothLimit);
             if(ditherMode){const float lsb=ditherMode==1?1.f/32768.f:1.f/8388608.f;
-                outL=std::clamp(outL+(random01()-random01())*lsb,-limit,limit);
-                outR=std::clamp(outR+(random01()-random01())*lsb,-limit,limit);
+                outL=std::clamp(outL+(random01()-random01())*lsb,-smoothLimit,smoothLimit);
+                outR=std::clamp(outR+(random01()-random01())*lsb,-smoothLimit,smoothLimit);
             }
             buffer[i*2]=std::isfinite(outL)?outL:0.f;
             buffer[i*2+1]=std::isfinite(outR)?outR:0.f;
@@ -196,6 +198,7 @@ public:
         return S_OK;
     }
 private:
+    vpx::LookaheadLimiter limiter;
     float lastSampleRate=0.f,smoothIn=1.f,smoothOut=1.f,smoothWidth=1.f,smoothLimit=.95f;
     float smoothBass=1.f,smoothMid=1.f,smoothTreble=1.f,smoothThreshold=.5f,smoothRatio=2.f;
     float smoothTransient=.5f,smoothExciter=0.f,smoothReverb=0.f,smoothDelay=0.f;
